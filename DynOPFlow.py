@@ -708,6 +708,7 @@ class PowerGrid:
         solver = IpoptSolver(Cost,G)
         solver.setOption("parametric",True)    
         solver.setOption("generate_hessian",True)
+        solver.setOption("print_level",0)
         solver.setOption("max_iter",2000)
         solver.setOption("tol",1e-4)
         solver.setOption("linear_solver","ma27")
