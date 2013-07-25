@@ -163,7 +163,7 @@ class Plant:
     
         self._Shoot = Shoot
      
-    def __BuildFunc__(self, Expr, Terminal):
+    def _BuildFunc(self, Expr, Terminal):
     
         X      = self.States
         U      = self.Inputs
@@ -191,12 +191,12 @@ class Plant:
         if not(isinstance(Const,list)):
             Const = [Const]
         
-        #ConstFunc = self.__BuildFunc__(veccat(Const), Terminal)
+        #ConstFunc = self._BuildFunc(veccat(Const), Terminal)
                 
         if    (Terminal == False):
-            self._StageConst    = self.__BuildFunc__(veccat(Const), Terminal)
+            self._StageConst    = self._BuildFunc(veccat(Const), Terminal)
         elif  (Terminal == True): 
-            self._TerminalConst = self.__BuildFunc__(veccat(Const), Terminal)        
+            self._TerminalConst = self._BuildFunc(veccat(Const), Terminal)        
                 
         
     def setCost(self, Cost, Terminal = False):
@@ -204,12 +204,12 @@ class Plant:
             print "Plant already added to the grid, call ignored"
             return
 
-        #CostFunc = self.__BuildFunc__(Cost, Terminal)
+        #CostFunc = self._BuildFunc(Cost, Terminal)
         
         if    (Terminal == False):
-            self._StageCost    = self.__BuildFunc__(Cost, Terminal)
+            self._StageCost    = self._BuildFunc(Cost, Terminal)
         elif  (Terminal == True): 
-            self._TerminalCost = self.__BuildFunc__(Cost, Terminal)
+            self._TerminalCost = self._BuildFunc(Cost, Terminal)
      
 
     def addPlant(self, Net):
@@ -446,7 +446,7 @@ class PowerGrid:
 ###########     POWER DISPACTH PROBLEM   ##########
 
 
-    def __CostConstructor__(self, V, EP, Nstage, GridLoss):
+    def _CostConstructor(self, V, EP, Nstage, GridLoss):
         """
         Constructor for the Cost function, handy to build the cost for different V:s
         """
@@ -571,10 +571,10 @@ class PowerGrid:
                 
         ###############################     BUILD COST AND CONSTRAINTS         ###############################
         
-        Cost, CostF = self.__CostConstructor__(V, EP, Nstage, GridLoss)
+        Cost, CostF = self._CostConstructor(V, EP, Nstage, GridLoss)
         
         if (Simulation > 0):   
-            _,self.CostNMPC = self.__CostConstructor__(Vstore, EP, Simulation, GridLoss)
+            _,self.CostNMPC = self._CostConstructor(Vstore, EP, Simulation, GridLoss)
         else:
             self.CostNMPC = CostF
  
