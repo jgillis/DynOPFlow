@@ -213,7 +213,7 @@ Net.UBInputProfiles['Load',:,'ReactivePower'] = LoadReactivePower
 #Net.DYNSolvePlot(Sol, dt = 1)
 #
 #assert(0==1)                                             
-Traj, NMPC_Info = Net.NMPCSimulation(x0 = x0, u0 = u0, init = init, Simulation = Nsimulation) 
+Traj, NMPC_Info = Net.NMPCSimulation(x0 = x0, u0 = u0, init = init, Simulation = Nsimulation, resetScale=True) 
                        
 #Plotting
 Net.ExtractInfo(Traj, PlantPower = True, BusPower = True, TotalPower = True)

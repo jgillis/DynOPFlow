@@ -36,8 +36,23 @@ plt.rcParams['text.usetex'] = False
 #rho_air   = 1.2
 #rho_water = 1e3
 #gravity   = 9.81
-    
-        
+   
+# Helper function to obtain automatic scaling 
+class BadScalingException(Exception):
+  pass
+
+scale_min  = 1e-5
+  
+def scaleFromBounds(lb,ub):
+  lb = filter(lambda x: x!=-inf,lb)
+  ub = filter(lambda x: x!=inf,ub)
+  lb = min(lb)
+  ub = max(ub)
+  scale = max(abs(lb),abs(ub))
+  if scale < scale_min:
+    raise BadScalingException()
+  else:
+    return scale 
 
 class Plant:
     def __init__(self, Inputs = [], States = [], R = 0., Directionality = 'Mono', Load = False, Bus = [], label = []):        # set of reasons (strings) why the Dae cannot be modified (add new x/z/u/p/output)
@@ -696,7 +711,7 @@ class PowerGrid:
         # set-up solver
         solver = IpoptSolver(nl)  
         solver.setOption("expand",True)
-        solver.setOption("print_level",0)
+        #solver.setOption("print_level",0)
         solver.setOption("hessian_approximation","exact")
         solver.setOption("max_iter",2000)
         solver.setOption("tol",1e-4)
@@ -714,6 +729,11 @@ class PowerGrid:
         self.VOptDispatch  = V
         self.OptDispatch   = solver        
         self.gOptDispatch  = g
+        
+        self.scaling_V = self.VOptDispatch(1)
+        self.scaling_g = self.gOptDispatch(1)
+        self.scaling_f = 1
+        self.OptDispatch_nl = nl
         
         self.Properties = BusProperties
         print self.Properties
@@ -790,7 +810,7 @@ class PowerGrid:
     
     #ASSIGN PROFILES & SOLVE
 
-    def DYNSolve(self, x0 = [], u0 = 0., init = [], time = 0, Periodic = False, EW = 1.):
+    def DYNSolve(self, x0 = [], u0 = 0., init = [], time = 0, Periodic = False, EW = 1., resetScale=False):
         
         lbV  =  self.VOptDispatch(-inf)
         ubV  =  self.VOptDispatch( inf)
@@ -844,7 +864,7 @@ class PowerGrid:
         lbV['States',0] = x0 
         ubV['States',0] = x0
         
-        lbV.cat = lbV.cat - (ubV.cat == inf)*ubV.cat #Set inf in x0 to free the initial conditions
+        #lbV.cat = lbV.cat - (ubV.cat == inf)*ubV.cat #Set inf in x0 to free the initial conditions
                 
         ###### PERIODIC CONSTRAINTS (IF REQUIRED)   #######
         #if (Periodic == False):
@@ -854,21 +874,82 @@ class PowerGrid:
         EP = self.EP()
         EP['u0'] = u0
         EP['EW'] = EW
+        
+
+        # Logic to calculate scaling
+        if resetScale:
+          
+          # Scaling for decision variables
+          self.scaling_V = self.VOptDispatch(1)
+          for k in ["Inputs","States"]:
+            for c in self.VOptDispatch.getStruct(k).canonicalIndices():
+              i = (k,slice(None))+c
+              try:
+                scale = self.scaling_V.__setitem__(i,scaleFromBounds(lbV.__getitem__(i),ubV.__getitem__(i)))
+              except BadScalingException:
+                print "Warning. Variable %s is badly scaled by bounds." % str(i)
+          for bus in range(NBus):
+            scale = self.PowerFlowBounds['Vmax'][bus]
+            if scale < scale_min or scale==inf:
+              print "Warning. Bus VMax %d is badly scaled." % str(bus)
+            else:
+              self.scaling_V["BusVoltages",:,"Imag",bus] = scale
+              self.scaling_V["BusVoltages",:,"Real",bus] = scale
+            
+          # Scaling for nonlinear bounds
+          self.scaling_g = self.gOptDispatch(1)
+          for k in ["CurrentBalance","BusVoltages2","LineCurrents2"]:
+            for i in range(lbg[k,0].size()):
+              try:
+                self.scaling_g[k,:,i] = scaleFromBounds(lbg[k,:,i],ubg[k,:,i])
+              except:
+                print "Warning. Constraint (%s,:,%d) is badly scaled by bounds." % (k,i) 
+        
+          # Scaling for objective function
+          nl = self.OptDispatch_nl
+          X, P = nlpIn(nl.symbolicInput(),"x","p")
+          
+          nl.setInput(EP,       "p")
+          nl.setInput(lbV,       "x")
+          nl.evaluate()
+          f_low = nl.getOutput()/10
+          nl.setInput(ubV,       "x")
+          nl.evaluate()
+          f_high = nl.getOutput()/10
+          nl.setInput(init,       "x")
+          nl.evaluate()
+          f_init = nl.getOutput()
+          
+          self.scaling_f = max([abs(f_low),abs(f_high),abs(f_init)])
+          
+          # Construct an alternative solver
+          F,G = nlpOut(nl.call(nlpIn(x=X*self.scaling_V.cat,p=P)),"f","g")
+          
+          scaled_nl = MXFunction(nlpIn(x=X,p=P),nlpOut(f=F/self.scaling_f,g=G/self.scaling_g.cat))
+          
+          options = self.OptDispatch.dictionary()
+          self.OptDispatch = IpoptSolver(scaled_nl)
+          self.OptDispatch.setOption(options)
+          self.OptDispatch.init()
+          
+        
        
-        self.OptDispatch.setInput(lbV,      "lbx")
-        self.OptDispatch.setInput(ubV,      "ubx")
-        self.OptDispatch.setInput(init,     "x0" )
-        self.OptDispatch.setInput(lbg,      "lbg")
-        self.OptDispatch.setInput(ubg,      "ubg")
+        self.OptDispatch.setInput(lbV/self.scaling_V.cat,      "lbx")
+        self.OptDispatch.setInput(ubV/self.scaling_V.cat,      "ubx")
+        self.OptDispatch.setInput(init/self.scaling_V.cat,     "x0" )
+        self.OptDispatch.setInput(lbg/self.scaling_g.cat,      "lbg")
+        self.OptDispatch.setInput(ubg/self.scaling_g.cat,      "ubg")
         
         self.OptDispatch.setInput(EP,       "p")
+        
+        
         
         self.OptDispatch.solve()
         
         self.lbV = lbV
         self.ubV = ubV
         
-        v_opt = self.VOptDispatch(self.OptDispatch.output("x"))
+        v_opt = self.VOptDispatch(self.OptDispatch.output("x")*self.scaling_V.cat)
         
         success = int(self.OptDispatch.getStat('return_status') == 'Solve_Succeeded')
     
@@ -899,13 +980,15 @@ class PowerGrid:
     
     
     
-    def NMPCSimulation(self, x0 = [], u0 = [], init = [], Simulation = 0):
+    def NMPCSimulation(self, x0 = [], u0 = [], init = [], Simulation = 0,resetScale=False):
         #####    NMPC Loop     #####
         NMPC = {'time': 0, 'success' : [], 'Traj' : []}
         Vstore = self.Vstore
 
         while (NMPC['time'] < Simulation):
-            Sol, stats = self.DYNSolve(x0 = x0, u0 = u0, time = NMPC['time'], init = init)
+            Sol, stats = self.DYNSolve(x0 = x0, u0 = u0, time = NMPC['time'], init = init, resetScale=resetScale)
+            
+            resetScale = False
             
             NMPC['success'].append(stats)
             NMPC['Traj'].append(Sol)
