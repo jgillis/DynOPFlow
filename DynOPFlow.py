@@ -17,6 +17,8 @@ NMPC for Dynamic Optimal Power Flow and Power Dispatch
 
 Requires the installation of the open-source Python module casADi together with the NLP solver ipopt
 
+Required version of CasADi: v1.7.x
+
 """
 
 from casadi import *
@@ -139,10 +141,10 @@ class Plant:
         fimplicit = SXFunction(daeIn(x=X,p=U),daeOut(ode=RHS))
         fimplicit.init()
         
-        k1  = fimplicit.eval(daeIn(  x=X,p=U                ))[DAE_ODE]
-        k2  = fimplicit.eval(daeIn(  x=X+0.5*dtRK4*k1,p=U   ))[DAE_ODE]
-        k3  = fimplicit.eval(daeIn(  x=X+0.5*dtRK4*k2,p=U   ))[DAE_ODE]
-        k4  = fimplicit.eval(daeIn(  x=X+dtRK4*k3,p=U       ))[DAE_ODE]
+        [k1]  = daeOut(fimplicit.eval(daeIn(  x=X,p=U                )),"ode")
+        [k2]  = daeOut(fimplicit.eval(daeIn(  x=X+0.5*dtRK4*k1,p=U   )),"ode")
+        [k3]  = daeOut(fimplicit.eval(daeIn(  x=X+0.5*dtRK4*k2,p=U   )),"ode")
+        [k4]  = daeOut(fimplicit.eval(daeIn(  x=X+dtRK4*k3,p=U       )),"ode")
         
         rk4_step = SXFunction([X,U],[X + (1./6)*dtRK4*(k1 + 2*k2 + 2*k3 + k4)])
         rk4_step.init()
@@ -335,15 +337,13 @@ class PowerGrid:
             for line in range(NLine):
                 Cost += np.real(Graph[line][2])*LineCurrents2[line]
             
-            Cost = MXFunction([V],[Cost])
-            Cost.init()
-                       
-            G = MXFunction([V],[g])
-            G.init()
-            G = G.expand()
+            nl = MXFunction(nlpIn(V=V),nlpOut(f=Cost,g=g))
+            nl.init()
             
             # set-up solver
-            solver = IpoptSolver(Cost,G)
+            solver = IpoptSolver(nl)
+            solver.setOption("print_level",0)
+            solver.setOption("expand",True)
             solver.setOption("parametric",False)    
             solver.setOption("generate_hessian",True)
             solver.setOption("max_iter",1000)
@@ -481,10 +481,10 @@ class PowerGrid:
                 Cost += Cost_k
                         
         Cost = Cost/Nstage
-        Cost = MXFunction([V,EP],[Cost])
-        Cost.init() 
+        CostF = MXFunction([V,EP],[Cost])
+        CostF.init() 
 
-        return Cost
+        return Cost, CostF
 
     
     def Dispatch(self, Horizon = 24, Simulation = 0, GridLoss = 'True'):
@@ -571,12 +571,12 @@ class PowerGrid:
                 
         ###############################     BUILD COST AND CONSTRAINTS         ###############################
         
-        Cost = self.__CostConstructor__(V, EP, Nstage, GridLoss)
+        Cost, CostF = self.__CostConstructor__(V, EP, Nstage, GridLoss)
         
         if (Simulation > 0):   
-            self.CostNMPC = self.__CostConstructor__(Vstore, EP, Simulation, GridLoss)
+            _,self.CostNMPC = self.__CostConstructor__(Vstore, EP, Simulation, GridLoss)
         else:
-            self.CostNMPC = Cost
+            self.CostNMPC = CostF
  
  
 
@@ -699,16 +699,14 @@ class PowerGrid:
           entry('IneqConst',      expr = veccat(IneqConst))
         ])
         
-      
-        G = MXFunction([V,EP],[g])
-        G.init()
-        G = G.expand()
+        nl = MXFunction(nlpIn(x=V,p=EP),nlpOut(f=Cost,g=g))
+        nl.init()
         
         # set-up solver
-        solver = IpoptSolver(Cost,G)
-        solver.setOption("parametric",True)    
-        solver.setOption("generate_hessian",True)
+        solver = IpoptSolver(nl)  
+        solver.setOption("expand",True)
         solver.setOption("print_level",0)
+        solver.setOption("hessian_approximation","exact")
         solver.setOption("max_iter",2000)
         solver.setOption("tol",1e-4)
         solver.setOption("linear_solver","ma27")
