@@ -132,7 +132,7 @@ Thermal.addPlant(Net)
 Thermal.UB['Inputs','Power'] = 1000
 
 #####   Load      ######
-Load = Plant(Load = 'True', Bus = 0, label = 'Load')
+Load = Plant(Load = True, Bus = 0, label = 'Load')
 Load.addPlant(Net)
 Load.LB['Inputs',  'ActivePower'] = -1000
 Load.LB['Inputs','ReactivePower'] =  -750
@@ -184,7 +184,7 @@ Net.UBInputProfiles['Load',:,'ReactivePower'] = LoadReactivePower
 Traj, NMPC_Info = Net.NMPCSimulation(x0 = x0, u0 = u0, init = init, Simulation = Nsimulation) 
                        
 #Plotting
-Net.ExtractInfo(Traj, PlantPower = 'True', BusPower = 'True', TotalPower = 'True')
+Net.ExtractInfo(Traj, PlantPower = True, BusPower = True, TotalPower = True)
 
 Path = '/Users/sebastien/Desktop/Research/PowerFlowCodes/Paper/Figures'
 SavedFigs = Net.DYNSolvePlot(Traj, dt = 1/24., Path = Path)          

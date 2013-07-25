@@ -40,9 +40,9 @@ plt.rcParams['text.usetex'] = False
         
 
 class Plant:
-    def __init__(self, Inputs = [], States = [], R = 0., Directionality = 'Mono', Load = 'False', Bus = [], label = []):        # set of reasons (strings) why the Dae cannot be modified (add new x/z/u/p/output)
+    def __init__(self, Inputs = [], States = [], R = 0., Directionality = 'Mono', Load = False, Bus = [], label = []):        # set of reasons (strings) why the Dae cannot be modified (add new x/z/u/p/output)
 
-        self._frozen = 'false'
+        self._frozen = False
         self.Bus     = Bus
         self.label = label
         self.Directionality = Directionality
@@ -70,7 +70,7 @@ class Plant:
                      entry("CurrentImag")]
         
         #Structure for INPUTS of various power plants
-        if      (Load == 'True'):
+        if      (Load == True):
             InputList.append(entry("ActivePower"))
             InputList.append(entry("ReactivePower"))
         elif    (Directionality == 'Bi'):
@@ -110,9 +110,9 @@ class Plant:
         self.LB = Bound(-inf)
         self.UB = Bound( inf)
         
-        if (Directionality == 'Mono') and (Load == 'False'):
+        if (Directionality == 'Mono') and (Load == False):
             self.LB['Inputs','Power'] = 0.
-        elif (Directionality == 'Bi') and (Load == 'False'):
+        elif (Directionality == 'Bi') and (Load == False):
             self.LB['Inputs','Pcharge'] = 0.
             self.LB['Inputs','Pdischarge'] = 0.
         else:
@@ -123,7 +123,7 @@ class Plant:
     
             
     def setDynamics(self, RHS = [], dt = 1., nstep = 10):
-        if (self._frozen == 'true'):
+        if (self._frozen == True):
             print "Plant already added to the grid, call ignored"
             return
 
@@ -170,7 +170,7 @@ class Plant:
         Uprev  = self.InputsPrev
                    
           
-        if Terminal == 'False':
+        if Terminal == False:
             listFuncInput = [U, Uprev]            
             if    (X.size > 0):
                 listFuncInput.append(X)
@@ -182,9 +182,9 @@ class Plant:
         
         return Func
     
-    def setConstraints(self, Const, Terminal = 'False'):
+    def setConstraints(self, Const, Terminal = False):
         
-        if (self._frozen == 'true'):
+        if (self._frozen == True):
             print "Plant already added to the grid, call ignored"
             return
         
@@ -193,32 +193,32 @@ class Plant:
         
         #ConstFunc = self.__BuildFunc__(veccat(Const), Terminal)
                 
-        if    (Terminal == 'False'):
+        if    (Terminal == False):
             self._StageConst    = self.__BuildFunc__(veccat(Const), Terminal)
-        elif  (Terminal == 'True'): 
+        elif  (Terminal == True): 
             self._TerminalConst = self.__BuildFunc__(veccat(Const), Terminal)        
                 
         
-    def setCost(self, Cost, Terminal = 'False'):
-        if (self._frozen == 'true'):
+    def setCost(self, Cost, Terminal = False):
+        if (self._frozen == True):
             print "Plant already added to the grid, call ignored"
             return
 
         #CostFunc = self.__BuildFunc__(Cost, Terminal)
         
-        if    (Terminal == 'False'):
+        if    (Terminal == False):
             self._StageCost    = self.__BuildFunc__(Cost, Terminal)
-        elif  (Terminal == 'True'): 
+        elif  (Terminal == True): 
             self._TerminalCost = self.__BuildFunc__(Cost, Terminal)
      
 
     def addPlant(self, Net):
-        if (self._frozen == 'true'):
+        if (self._frozen == True):
             print "Plant already added to the grid, call ignored"
             return
         
         Net.PlantList.append(self)
-        self._frozen = 'true'
+        self._frozen = True
 
 class PowerGrid:
     """
@@ -239,7 +239,7 @@ class PowerGrid:
     
 
     #CONSTRUCT POWER FLOW    
-    def Flow(self, OPFSolver = 'False'):
+    def Flow(self, OPFSolver = False):
         NBus =  self.NBus
         NLine = np.size(    self.Graph       ,axis = 0)
 
@@ -302,10 +302,10 @@ class PowerGrid:
         self.BusCurrentsImagFunc.init()
         self.LineCurrents2Func.init()
         self.BusVoltages2Func.init()
-        self.OPF = 'True'
+        self.OPF = True
 
         #CONSTRUCT OPF SOLVER IS ASKED IN THE FLOW FUNCTION OPTIONS 
-        if (OPFSolver == 'True'):
+        if (OPFSolver == True):
             print "Construct OPF Solver"
             
             Power = struct_ssym([
@@ -370,12 +370,12 @@ class PowerGrid:
         
         if not(hasattr(self,'OPF')):
             #Check that .Flow() has been called
-            print "You must call .Flow(OPFSolver = 'True') to setup OPF before calling .OPFSolve()"
+            print "You must call .Flow(OPFSolver = True) to setup OPF before calling .OPFSolve()"
             return []
 
-        if (self.OPF == 'True'):
+        if (self.OPF == True):
             #Check that a solver exists
-            print "You must call .Flow(OPFSolver = 'True') to setup OPF before calling .OPFSolve()"
+            print "You must call .Flow(OPFSolver = True) to setup OPF before calling .OPFSolve()"
             return []
     
     
@@ -453,7 +453,7 @@ class PowerGrid:
         
         Cost = 0
         
-        if (GridLoss == 'True'):
+        if (GridLoss == True):
             NLine     =  len(    self.Graph   )        
             for k in range(Nstage):
                 # Grid losses
@@ -487,11 +487,11 @@ class PowerGrid:
         return Cost, CostF
 
     
-    def Dispatch(self, Horizon = 24, Simulation = 0, GridLoss = 'True'):
+    def Dispatch(self, Horizon = 24, Simulation = 0, GridLoss = True):
         """
         Constructs the power dispatch problem, default Horizon length (if argument Horizon is not provided) is 24 time units
         """
-        if (self.OPF == 'False'):
+        if (self.OPF == False):
             Power.Flow(self)
             
         print "Construct Dynamic OPF"
@@ -634,7 +634,7 @@ class PowerGrid:
                 # Plant participating current squared, i.e. |i|**2
                 PlantCurrent2 = PlantCurrentReal*PlantCurrentReal + PlantCurrentImag*PlantCurrentImag
                 
-                if (plant._Load == 'True'):
+                if (plant._Load == True):
                     #Load fixing: [Active, Reactive] = Consumed Active / Reactive power
                     EquConst.append(ParticipatingActivePower   - V['Inputs',k,plant.label,'ActivePower'])
                     EquConst.append(ParticipatingReactivePower - V['Inputs',k,plant.label,'ReactivePower'])
@@ -799,7 +799,7 @@ class PowerGrid:
     
     #ASSIGN PROFILES & SOLVE
 
-    def DYNSolve(self, x0 = [], u0 = 0., init = [], time = 0, Periodic = 'False', EW = 1.):
+    def DYNSolve(self, x0 = [], u0 = 0., init = [], time = 0, Periodic = False, EW = 1.):
         
         lbV  =  self.VOptDispatch(-inf)
         ubV  =  self.VOptDispatch( inf)
@@ -851,7 +851,7 @@ class PowerGrid:
         lbV.cat = lbV.cat - (ubV.cat == inf)*ubV.cat #Set inf in x0 to free the initial conditions
                 
         ###### PERIODIC CONSTRAINTS (IF REQUIRED)   #######
-        #if (Periodic == 'False'):
+        #if (Periodic == False):
         #    lbg['Periodic'] = -inf
         #    ubg['Periodic'] =  inf
 
@@ -931,7 +931,7 @@ class PowerGrid:
 
     
     #Extract results    
-    def ExtractInfo(self, v_opt, BusPower = 'False', PlantPower = 'False', TotalPower = 'False' ):
+    def ExtractInfo(self, v_opt, BusPower = False, PlantPower = False, TotalPower = False ):
         
         self.SolutionInfo = {}
         
@@ -961,15 +961,15 @@ class PowerGrid:
         self.SolutionInfo['LineCurrentsModule'] = np.concatenate(LineCurrents_opt,axis=1)
         
         #### Total Powers
-        if (TotalPower == 'True'):
+        if (TotalPower == True):
             TotalPower = {}
             
             TotalPower['Load'] = 0
-            for plant in [plant for plant in self.PlantList if (plant._Load == 'True')]:
+            for plant in [plant for plant in self.PlantList if (plant._Load == True)]:
                 TotalPower['Load'] -= np.array(v_opt['Inputs',:,plant.label,'ActivePower'])
                    
             TotalPower['Injected'] = 0.
-            for plant in [plant for plant in self.PlantList if not(plant._Load == 'True')]:     
+            for plant in [plant for plant in self.PlantList if not(plant._Load == True)]:     
                     if (plant.Directionality == 'Mono'):
                         TotalPower['Injected'] += np.array(v_opt['Inputs',:,plant.label,'Power'])
                     else:
@@ -979,7 +979,7 @@ class PowerGrid:
         
         
         #Construct implicit values in the network 
-        if (BusPower == 'True'):
+        if (BusPower == True):
             
             BusActivePower = []
             BusReactivePower = []
@@ -1007,7 +1007,7 @@ class PowerGrid:
             self.SolutionInfo['BusCurrentModule'] = np.concatenate(  BusCurrentModule, axis=0)
             self.SolutionInfo['BusCurrentAngle']  = np.concatenate(  BusCurrentAngle,  axis=0)
         
-        if (PlantPower == 'True'):
+        if (PlantPower == True):
             PlantActivePowerDictionary = {}
             PlantReactivePowerDictionary = {}
             CosPhiDictionary = {}
@@ -1049,7 +1049,7 @@ class PowerGrid:
     #### RESULT PLOTTING #####
     
 
-    def DYNSolvePlot(self, v_opt, NMPC = 'False', dt = 1, Path = []):
+    def DYNSolvePlot(self, v_opt, NMPC = False, dt = 1, Path = []):
         
         SavedFigs = []
         
@@ -1081,7 +1081,7 @@ class PowerGrid:
             time[key] = np.array([k*dt for k in range(len(v_opt[key]))]).T
         
         # construct a list of the plants (excluding the loads)
-        PlantList = [plant for plant in self.PlantList if not(plant._Load == 'True')]
+        PlantList = [plant for plant in self.PlantList if not(plant._Load == True)]
         SizeSubplt    = np.ceil(sqrt(len(PlantList)))
         SizeSubpltAll = np.ceil(sqrt(len(self.PlantList)))
         
@@ -1166,7 +1166,7 @@ class PowerGrid:
         plt.hold('on')
         for plant in self.PlantList:
             Power = []
-            if   plant._Load == 'True':
+            if   plant._Load == True:
                 Power = -np.array(v_opt['Inputs',:,plant.label,'ActivePower'])
             elif plant.Directionality == 'Bi':
                 Power = np.array(v_opt['Inputs',:,plant.label,'Pdischarge']) - np.array(v_opt['Inputs',:,plant.label,'Pcharge'])
@@ -1235,7 +1235,7 @@ class PowerGrid:
         plt.show()  
         return SavedFigs
     
-    def DYNSolvePlotCompare(self, v_opt, NMPC = 'False', label = '', marker = '', linewidth = 1):
+    def DYNSolvePlotCompare(self, v_opt, NMPC = False, label = '', marker = '', linewidth = 1):
     
         Nstage = self.TimeSetup['Horizon']
 
